@@ -1,0 +1,36 @@
+.DS_Store# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next.js build output
+.next/
+out/
+
+# VS Code
+.vscode/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Optional: ignore coverage if using Jest or similar
+coverage/
+
+# Optional: ignore TypeScript cache
+*.tsbuildinfo
+
+# Optional: ignore compiled output
+dist/
+
+# Optional: next-image optimization cache (if using next/image in some versions)
+.cache/
+
+# Ignore data files
+/data/
