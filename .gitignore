@@ -33,4 +33,7 @@ dist/
 .cache/
 
 # Ignore data files
-/data/
+/data/*
+
+# Except the pipeline directory
+!/data/Pipelines
