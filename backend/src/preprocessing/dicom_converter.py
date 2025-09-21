@@ -8,70 +8,62 @@ import torch
 from pydicom import dcmread
 
 
-def save_pet_sequences(output_path: Path, patient_id: str, sequences: list, label: str):
+def save_pet_volume(output_path: Path, patient_id: str, volume: np.ndarray, label: str):
     """
-    Saves multiple fixed-length PET sequences for a single patient as PyTorch tensors.
+    Saves a single trimmed PET volume for a patient as PyTorch tensor.
     
     Args:
-    :param output_path: Path to save the sequences.
+    :param output_path: Path to save the volume.
     :param patient_id: Patient identifier.
-    :param sequences: List of 3D sequences (N, 3, 256, 256).
-    :param label: Disease category name.
+    :param volume: Single 3D volume (N, 256, 256).
+    :param label: Disease code.
     """
     logger = logging.getLogger('PreprocessingLogger')
     
-    # Create disease-specific output directory
+    # create disease-specific output directory
     disease_output_path = output_path / label
     disease_output_path.mkdir(parents=True, exist_ok=True)
     
     try:
-        for seq_idx, sequence in enumerate(sequences):
-
-            # Use zero-padded sequence numbering: seq_000
-            filename = f'{patient_id}_pet_seq_{seq_idx:03d}.pt'
-            file_path = disease_output_path / filename
-            
-            # Convert to PyTorch tensor and save
-            tensor_data = {'label': label, 'PET': torch.from_numpy(sequence).float()}
-            torch.save(tensor_data, file_path)
-            
-            logger.info(f'PET sequence {seq_idx+1}/{len(sequences)} saved: {filename} (shape: {sequence.shape})')
-
+        # save as single volume with consistent naming
+        filename = f'{patient_id}.pt'
+        file_path = disease_output_path / filename
+        
+        # convert to PyTorch tensor and save
+        tensor_data = {'label': label, 'PET': torch.from_numpy(volume).float()}
+        torch.save(tensor_data, file_path)
+        logger.info(f'PET volume saved: {filename} (shape: {volume.shape})')
     except Exception as e:
-        logger.error(f'Error saving PET sequences for patient {patient_id}: {e}')
+        logger.error(f'Error saving PET volume for patient {patient_id}: {e}')
 
 
-def save_ct_sequences(output_path: Path, patient_id: str, sequences: list, label: str):
+def save_ct_volume(output_path: Path, patient_id: str, volume: np.ndarray, label: str):
     """
-    Saves multiple fixed-length CT sequences for a single patient as PyTorch tensors.
+    Saves a single trimmed CT volume for a patient as PyTorch tensor.
     
     Args:
-    :param output_path: Path to save the sequences.
+    :param output_path: Path to save the volume.
     :param patient_id: Patient identifier.
-    :param sequences: List of 3D sequences (N, 3, 256, 256).
-    :param label: Disease category name.
+    :param volume: Single 3D volume (N, 256, 256).
+    :param label: Disease code.
     """
     logger = logging.getLogger('PreprocessingLogger')
     
-    # Create disease-specific output directory
+    # create disease-specific output directory
     disease_output_path = output_path / label
     disease_output_path.mkdir(parents=True, exist_ok=True)
     
     try:
-        for seq_idx, sequence in enumerate(sequences):
-
-            # Use zero-padded sequence numbering: seq_000
-            filename = f'{patient_id}_ct_seq_{seq_idx:03d}.pt'
-            file_path = disease_output_path / filename
-            
-            # Convert to PyTorch tensor and save
-            tensor_data = {'label': label, 'CT': torch.from_numpy(sequence).float()}
-            torch.save(tensor_data, file_path)
-            
-            logger.info(f'CT sequence {seq_idx+1}/{len(sequences)} saved: {filename} (shape: {sequence.shape})')
-
+        # save as single volume with consistent naming
+        filename = f'{patient_id}.pt'
+        file_path = disease_output_path / filename
+        
+        # convert to PyTorch tensor and save
+        tensor_data = {'label': label, 'CT': torch.from_numpy(volume).float()}
+        torch.save(tensor_data, file_path)
+        logger.info(f'CT volume saved: {filename} (shape: {volume.shape})')
     except Exception as e:
-        logger.error(f'Error saving CT sequences for patient {patient_id}: {e}')
+        logger.error(f'Error saving CT volume for patient {patient_id}: {e}')
 
 
 class DicomConverter:
@@ -105,19 +97,18 @@ class DicomConverter:
             try:
                 ds = dcmread(file)
 
-                # Get z-position from ImagePositionPatient or SliceLocation
+                # get z-position from ImagePositionPatient or SliceLocation
                 z_pos = self._get_z_position(ds)
                 slices.append((z_pos, ds.pixel_array, ds))
-
             except Exception as e:
                 self.logger.warning(f'Skipped {file.name}: {e}')
 
-        # Sort by z-position instead of InstanceNumber
+        # sort by z-position instead of InstanceNumber
         slices.sort(key=lambda x: x[0])
         self.logger.info(f'Successfully loaded and sorted {len(slices)} slices by z-position.')
-
         return [(pixel_array, metadata) for _, pixel_array, metadata in slices]
     
+
     def _get_z_position(self, dicom_dataset):
         """
         Extract z-position from DICOM dataset.
@@ -128,7 +119,7 @@ class DicomConverter:
         :return: Z-position value
         """
         try:
-            # Try ImagePositionPatient
+            # try ImagePositionPatient
             if hasattr(dicom_dataset, 'ImagePositionPatient') and dicom_dataset.ImagePositionPatient:
                 return float(dicom_dataset.ImagePositionPatient[2])
             
@@ -136,14 +127,14 @@ class DicomConverter:
             pass
         
         try:
-            # Try SliceLocation as fallback
+            # try SliceLocation as fallback
             if hasattr(dicom_dataset, 'SliceLocation') and dicom_dataset.SliceLocation is not None:
                 return float(dicom_dataset.SliceLocation)
             
         except (AttributeError, TypeError):
             pass
         
-        # Final fallback to InstanceNumber
+        # final fallback to InstanceNumber
         try:
             if hasattr(dicom_dataset, 'InstanceNumber'):
                 return float(dicom_dataset.InstanceNumber)
@@ -151,17 +142,35 @@ class DicomConverter:
         except (AttributeError, TypeError):
             pass
         
-        # If all else fails, return 0
+        # if all else fails, return 0
         self.logger.warning("Could not determine z-position, using 0 as fallback")
         return 0.0
+
 
     @staticmethod
     def to_3d_array(slices: list) -> np.ndarray:
         """
         Converts a list of 2D image arrays into a 3D shape.
+        Ensures all slices have the same dimensions before stacking.
 
         Args:
         :param slices: The list of images to be converted.
         :return: A 3D image array.
         """
-        return np.stack(slices, axis=0)
+        if not slices:
+            raise ValueError("No slices provided")
+            
+        # check if all slices have the same shape
+        first_shape = slices[0].shape
+        consistent_slices = []
+        logger = logging.getLogger('PreprocessingLogger')
+        
+        for i, slice_img in enumerate(slices):
+            if slice_img.shape == first_shape:
+                consistent_slices.append(slice_img)
+            else:
+                logger.warning(f'Slice {i} has shape {slice_img.shape}, expected {first_shape}. Skipping.')
+        
+        if not consistent_slices:
+            raise ValueError("No consistent slices found")
+        return np.stack(consistent_slices, axis=0)

@@ -7,10 +7,10 @@ import numpy as np
 
 class IntensityProcessor:
     """
-    A class to process image intensities for different modalities such
-    as CT and PET. This class provides functions for converting intensity
-    values to Hounsfield Units (HU) and Standard Uptake Value (SUV). A
-    normalization function is also included to normalize the intensity
+    A class to process image intensities for PET and CT modalities.
+    This class provides functions for converting intensity values to 
+    Hounsfield Units (HU) and Standard Uptake Value (SUV). 
+    A normalization function is also included to normalize the intensity
     values.
     """
 
@@ -25,6 +25,7 @@ class IntensityProcessor:
         self.slices = slices
         self.normalize = normalize
         self.logger = logging.getLogger('PreprocessingLogger')
+
 
     def convert(self) -> list:
         """
@@ -46,6 +47,7 @@ class IntensityProcessor:
             converted_slices.append(converted_img)
         return converted_slices
 
+
     def _convert_to_hu(self, image: np.ndarray, metadata) -> np.ndarray:
         """
         Converts the image intensity to Hounsfield Units (HU) based
@@ -57,17 +59,25 @@ class IntensityProcessor:
         :return: An image converted into Hounsfield Units and clipped.
         """
         try:
-            rescale_slope = metadata.RescaleSlope
-            rescale_intercept = metadata.RescaleIntercept
-            hu = image * rescale_slope + rescale_intercept
+            # check if RescaleSlope and RescaleIntercept exist
+            if hasattr(metadata, 'RescaleSlope') and hasattr(metadata, 'RescaleIntercept'):
+                rescale_slope = metadata.RescaleSlope
+                rescale_intercept = metadata.RescaleIntercept
+                hu = image * rescale_slope + rescale_intercept
+            else:
+                # if rescale parameters don't exist, assume image is already in HU
+                self.logger.warning('RescaleSlope/RescaleIntercept not found, assuming image is already in HU')
+                hu = image.astype(np.float32)
             
-            # Clip CT values to typical soft tissue range [-1000, 400] HU
+            # clip CT values to typical soft tissue range [-1000, 400] HU
             hu_clipped = np.clip(hu, -1000, 400)
             return hu_clipped
-        
         except Exception as e:
             self.logger.error(f'Could not convert to HU: {e}')
-            return image
+
+            # return the original image if conversion fails
+            return image.astype(np.float32)
+
 
     def _convert_to_suv(self, image: np.ndarray, metadata) -> np.ndarray:
         """
@@ -89,6 +99,7 @@ class IntensityProcessor:
         except Exception as e:
             self.logger.error(f'Could not convert to SUV: {e}')
             return image
+
 
     @staticmethod
     def _normalize(image: np.ndarray) -> np.ndarray:

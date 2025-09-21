@@ -22,58 +22,74 @@ class VolumeProcessor:
         self.input_array = input_array
         self.logger = logging.getLogger('PreprocessingLogger')
 
-    def break_into_sequences(self, sequence_length: int = 16) -> list:
+
+    def trim_volume_by_threshold(self, intensity_threshold: float = 0.1, min_slices_to_keep: int = 20, max_mode: bool = True) -> np.ndarray:
         """
-        Break a 4D volume into multiple fixed-length sequences without overlapping.
-        If the last sequence is shorter than sequence_length, it will be zero-padded.
+        Trim the volume from beginning and end to remove slices with low anatomical content
+        (like legs and head in PET/CT scans) based on intensity threshold.
         
         Args:
-        :param sequence_length: Target length for each sequence (default: 16).
+            intensity_threshold: Threshold for mean intensity to determine if slice contains relevant anatomy
+            min_slices_to_keep: Minimum number of slices to keep even if below threshold
         
         Returns:
-        :return: List of 4D sequences, each with fixed length.
+            Trimmed volume
         """
         volume = self.input_array
-        current_depth = volume.shape[0]
-        sequences = []
         
-        self.logger.info(f'Breaking 4D volume of depth {current_depth} into non-overlapping sequences of length {sequence_length}')
+        # 3D (N, H, W)
+        depth = volume.shape[0]
+        slice_intensities = np.mean(volume, axis=(1, 2))
         
-        # Break into non-overlapping chunks
-        start = 0
-        while start < current_depth:
-            end = min(start + sequence_length, current_depth)
-            sequence = volume[start:end]
-            
-            # If sequence is shorter than target length, pad with zeros
-            if sequence.shape[0] < sequence_length:
-                padded_sequence = np.zeros((sequence_length, volume.shape[1], volume.shape[2], volume.shape[3]), dtype=volume.dtype)
-                padded_sequence[:sequence.shape[0]] = sequence
-                sequences.append(padded_sequence)
-                self.logger.info(f'Final sequence padded from {sequence.shape[0]} to {sequence_length} slices')
+        # normalize intensities to 0-1 range for consistent thresholding
+        if slice_intensities.max() > slice_intensities.min():
+            normalized_intensities = (slice_intensities - np.min(slice_intensities)) / (np.max(slice_intensities) - np.min(slice_intensities) + 1e-8)
 
-            else:
-                sequences.append(sequence)
+        else:
+            # all slices have same intensity - keep all
+            normalized_intensities = np.ones_like(slice_intensities)
+        
+        # find first and last slice meeting threshold criteria based on max_mode
+        if max_mode:
+            # keep slices >= threshold - find first slice above threshold from beginning
+            start_idx = 0
+            for i in range(depth):
+                if normalized_intensities[i] >= intensity_threshold:
+                    start_idx = i
+                    break
             
-            start += sequence_length
+            # find last slice above threshold from end
+            end_idx = depth - 1
+            for i in range(depth - 1, -1, -1):
+                if normalized_intensities[i] >= intensity_threshold:
+                    end_idx = i
+                    break
+        else:
+            # keep slices < threshold - find first slice below threshold from beginning
+            start_idx = 0
+            for i in range(depth):
+                if normalized_intensities[i] < intensity_threshold:
+                    start_idx = i
+                    break
+            
+            # find last slice below threshold from end
+            end_idx = depth - 1
+            for i in range(depth - 1, -1, -1):
+                if normalized_intensities[i] < intensity_threshold:
+                    end_idx = i
+                    break
         
-        self.logger.info(f'Created {len(sequences)} non-overlapping sequences')
-        return sequences
+        # ensure we keep minimum number of slices
+        total_slices = end_idx - start_idx + 1
+        if total_slices < min_slices_to_keep:
 
-    @staticmethod
-    def convert_slices_to_3_channels(volume: np.ndarray) -> np.ndarray:
-        """
-        Convert each slice in a volume to 3-channel format.
-        Changes shape from (N, H, W) to (N, 3, H, W).
+            # expand range to keep minimum slices, centered if possible
+            center = (start_idx + end_idx) // 2
+            half_min = min_slices_to_keep // 2
+            start_idx = max(0, center - half_min)
+            end_idx = min(depth - 1, start_idx + min_slices_to_keep - 1)
+            self.logger.info(f'Expanded range to meet minimum slice requirement')
         
-        Args:
-            volume: Input volume with shape (N, H, W)
-        
-        Returns:
-            Volume with shape (N, 3, H, W)
-        """
-        # Add channel dimension and repeat 3 times
-        volume_with_channels = np.expand_dims(volume, axis=1) 
-        volume_3_channels = np.repeat(volume_with_channels, 3, axis=1)
-        
-        return volume_3_channels
+        # trim the volume
+        trimmed_volume = volume[start_idx:end_idx + 1]
+        return trimmed_volume
