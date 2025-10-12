@@ -4,18 +4,18 @@ from pathlib import Path
 
 # ==== Third Party Imports ====
 import numpy as np
-import torch
 from pydicom import dcmread
+from skimage.transform import resize
 
 
 def save_pet_volume(output_path: Path, patient_id: str, volume: np.ndarray, label: str):
     """
-    Saves a single trimmed PET volume for a patient as PyTorch tensor.
+    Saves a single trimmed PET volume for a patient as numpy array.
     
     Args:
     :param output_path: Path to save the volume.
     :param patient_id: Patient identifier.
-    :param volume: Single 3D volume (N, 256, 256).
+    :param volume: Single 3D volume (N, H, W).
     :param label: Disease code.
     """
     logger = logging.getLogger('PreprocessingLogger')
@@ -25,13 +25,11 @@ def save_pet_volume(output_path: Path, patient_id: str, volume: np.ndarray, labe
     disease_output_path.mkdir(parents=True, exist_ok=True)
     
     try:
-        # save as single volume with consistent naming
-        filename = f'{patient_id}.pt'
+        # save as numpy array
+        filename = f'{patient_id}.npy'
         file_path = disease_output_path / filename
         
-        # convert to PyTorch tensor and save
-        tensor_data = {'label': label, 'PET': torch.from_numpy(volume).float()}
-        torch.save(tensor_data, file_path)
+        np.save(file_path, volume)
         logger.info(f'PET volume saved: {filename} (shape: {volume.shape})')
     except Exception as e:
         logger.error(f'Error saving PET volume for patient {patient_id}: {e}')
@@ -39,12 +37,12 @@ def save_pet_volume(output_path: Path, patient_id: str, volume: np.ndarray, labe
 
 def save_ct_volume(output_path: Path, patient_id: str, volume: np.ndarray, label: str):
     """
-    Saves a single trimmed CT volume for a patient as PyTorch tensor.
+    Saves a single trimmed CT volume for a patient as numpy array.
     
     Args:
     :param output_path: Path to save the volume.
     :param patient_id: Patient identifier.
-    :param volume: Single 3D volume (N, 256, 256).
+    :param volume: Single 3D volume (N, H, W).
     :param label: Disease code.
     """
     logger = logging.getLogger('PreprocessingLogger')
@@ -54,13 +52,11 @@ def save_ct_volume(output_path: Path, patient_id: str, volume: np.ndarray, label
     disease_output_path.mkdir(parents=True, exist_ok=True)
     
     try:
-        # save as single volume with consistent naming
-        filename = f'{patient_id}.pt'
+        # save as numpy array
+        filename = f'{patient_id}.npy'
         file_path = disease_output_path / filename
         
-        # convert to PyTorch tensor and save
-        tensor_data = {'label': label, 'CT': torch.from_numpy(volume).float()}
-        torch.save(tensor_data, file_path)
+        np.save(file_path, volume)
         logger.info(f'CT volume saved: {filename} (shape: {volume.shape})')
     except Exception as e:
         logger.error(f'Error saving CT volume for patient {patient_id}: {e}')
@@ -148,29 +144,32 @@ class DicomConverter:
 
 
     @staticmethod
-    def to_3d_array(slices: list) -> np.ndarray:
+    def to_3d_array(slices: list, target_size: int = 256) -> np.ndarray:
         """
         Converts a list of 2D image arrays into a 3D shape.
-        Ensures all slices have the same dimensions before stacking.
+        Resizes all slices to the target size (default 256x256) to ensure consistency.
 
         Args:
         :param slices: The list of images to be converted.
-        :return: A 3D image array.
+        :param target_size: Target size for each slice (default 256).
+        :return: A 3D image array with shape (N, target_size, target_size).
         """
         if not slices:
             raise ValueError("No slices provided")
             
-        # check if all slices have the same shape
-        first_shape = slices[0].shape
-        consistent_slices = []
         logger = logging.getLogger('PreprocessingLogger')
+        resized_slices = []
         
         for i, slice_img in enumerate(slices):
-            if slice_img.shape == first_shape:
-                consistent_slices.append(slice_img)
+            if slice_img.shape == (target_size, target_size):
+                # slice already has correct size
+                resized_slices.append(slice_img)
             else:
-                logger.warning(f'Slice {i} has shape {slice_img.shape}, expected {first_shape}. Skipping.')
+                # resize slice to target size
+                logger.info(f'Resizing slice {i} from {slice_img.shape} to ({target_size}, {target_size})')
+                resized_slice = resize(slice_img, (target_size, target_size), 
+                                     preserve_range=True, anti_aliasing=True)
+                resized_slices.append(resized_slice)
         
-        if not consistent_slices:
-            raise ValueError("No consistent slices found")
-        return np.stack(consistent_slices, axis=0)
+        logger.info(f'Stacking {len(resized_slices)} slices into 3D volume with shape ({len(resized_slices)}, {target_size}, {target_size})')
+        return np.stack(resized_slices, axis=0)

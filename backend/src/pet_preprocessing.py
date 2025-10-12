@@ -1,7 +1,6 @@
 # ==== Standard Imports ====
 from pathlib import Path
 import logging
-from skimage.transform import resize
 
 # ==== Local Project Imports ====
 from preprocessing.dicom_converter import DicomConverter, save_pet_volume
@@ -22,7 +21,7 @@ def preprocess_pet_patient_data(output_path: Path, dataset_dir: Path, disease_co
     5. Normalize to [0,1]
     6. Trim sequences using intensity threshold value to avoid legs/head
     7. Final shape: (N, 256, 256) where N is slice count
-    8. Save as a PyTorch tensor
+    8. Save as numpy array
     
     Args:
     :param output_path: Path to save the processed volume.
@@ -50,21 +49,21 @@ def preprocess_pet_patient_data(output_path: Path, dataset_dir: Path, disease_co
         # convert to SUV and apply normalization for PET scans
         slices = IntensityProcessor(slices, True).convert() 
 
-        # stack the 2D NumPy arrays to a 3D shape
-        volume = DicomConverter.to_3d_array(slices)
+        # stack the 2D NumPy arrays to a 3D shape and resize to 256x256
+        volume = DicomConverter.to_3d_array(slices, target_size=256)
         
-        logger.info(f'Original volume shape: {volume.shape}')
+        logger.info(f'Volume shape after stacking and resizing: {volume.shape}')
         
         # trim volume using intensity threshold
         volume_processor = VolumeProcessor(volume)
         trimmed_volume = volume_processor.trim_volume_by_threshold(
             intensity_threshold=threshold,
-            min_slices_to_keep=20,      # Keep minimum 20 slices for analysis
+            min_slices_to_keep=20,      # keep minimum 20 slices for analysis
             max_mode=max
         )
         logger.info(f'Trimmed volume shape with threshold {threshold}: {trimmed_volume.shape}')
         
-        # Save the trimmed volume as single PyTorch tensor using disease code
+        # save the trimmed volume as sequence using disease code
         save_pet_volume(output_path, patient_id, trimmed_volume, disease_code)
         logger.info(f'---------- Successfully processed PET patient {patient_id} from {disease_code} ----------')
     except Exception as e:
@@ -75,6 +74,8 @@ def preprocess_pet_patient_data(output_path: Path, dataset_dir: Path, disease_co
 def main():
     """Main function to run PET preprocessing with multiple threshold values."""
 
+    max_mode = True # set to True for up_threshold, False for down_threshold
+
     # setup logger
     logger = setup_logger(Path('backend/src/logs'), 'pet_preprocessing.log', 'PreprocessingLogger')
     
@@ -84,14 +85,17 @@ def main():
     
     # threshold values to test
     threshold_values = [0.5, 0.6, 0.7, 0.8]
+    
     logger.info(f'=====< STARTING PET DATA PREPROCESSING WITH INTENSITY THRESHOLDS {threshold_values} >=====')
+    logger.info(f'Mode: {"PROCESSING IMAGES WITH HIGHER INTENSITY VALUES" if max_mode else "PROCESSING IMAGES WITH LOWER INTENSITY VALUES"} threshold')
     
     # process PET images with different thresholds
     for threshold in threshold_values:
         logger.info(f'===== PROCESSING WITH THRESHOLD {threshold} =====')
         
-        # create threshold-specific output directory
-        pet_output_path = pet_base_output_path / f'threshold_{threshold}'
+        # create threshold-specific output directory based on max_mode
+        prefix = 'up' if max_mode else 'down'
+        pet_output_path = pet_base_output_path / f'{prefix}_threshold_{threshold}'
         pet_output_path.mkdir(parents=True, exist_ok=True)
         
         # process PET images
@@ -103,20 +107,21 @@ def main():
                 # iterate through patient directories within each disease
                 for patient_dir in disease_dir.iterdir():
                     if patient_dir.is_dir() and not patient_dir.name.startswith('.'):
-                        preprocess_pet_patient_data(pet_output_path, patient_dir, disease_code, logger, threshold, max=True)
+                        preprocess_pet_patient_data(pet_output_path, patient_dir, disease_code, logger, threshold, max=max_mode)
     
     logger.info(f'=====< PET DATA PREPROCESSING COMPLETED FOR ALL THRESHOLDS >=====')
     
     # log summary of results
     logger.info('===== PREPROCESSING SUMMARY =====')
     for threshold in threshold_values:
-        threshold_path = pet_base_output_path / f'threshold_{threshold}'
+        prefix = 'up' if max_mode else 'down'
+        threshold_path = pet_base_output_path / f'{prefix}_threshold_{threshold}'
 
         if threshold_path.exists():
-            total_files = len(list(threshold_path.rglob('*.pt')))
-            logger.info(f'Threshold {threshold}: {total_files} processed volumes')
+            total_files = len(list(threshold_path.rglob('*.npy')))
+            logger.info(f'{prefix.capitalize()} Threshold {threshold}: {total_files} processed volumes')
         else:
-            logger.info(f'Threshold {threshold}: No output directory found')
+            logger.info(f'{prefix.capitalize()} Threshold {threshold}: No output directory found')
 
 
 # ========== Runnable ==========

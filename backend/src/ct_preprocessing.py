@@ -1,8 +1,6 @@
 # ==== Standard Imports ====
 from pathlib import Path
 import logging
-import numpy as np
-from skimage.transform import resize
 
 # ==== Local Project Imports ====
 from preprocessing.dicom_converter import DicomConverter, save_ct_volume
@@ -20,10 +18,10 @@ def preprocess_ct_patient_data(output_path: Path, dataset_dir: Path, logger: log
     3. Stack into 3D volume
     4. Clip values (CT: HU in [-1000,400])
     5. Normalize to [0,1]
-    6. Resize every slice to 256x256
+    6. Resize every slice to 512x512
     7. Trim sequences using intensity threshold value to avoid legs/head
-    8. Final shape: (N, 256, 256) where N is slice count
-    9. Save as a PyTorch tensor
+    8. Final shape: (N, 512, 512) where N is slice count
+    9. SSave as numpy array
     
     Args:
     :param output_path: Path to save the processed volume.
@@ -52,26 +50,20 @@ def preprocess_ct_patient_data(output_path: Path, dataset_dir: Path, logger: log
         intensity_processor = IntensityProcessor(slices, False)
         processed_slices = intensity_processor.convert()
 
-        # stack the 2D NumPy arrays to a 3D shape
-        volume = DicomConverter.to_3d_array(processed_slices)
-        logger.info(f'Original volume shape: {volume.shape}')
-
-        # resize every slice to 256x256
-        resized_volume = np.zeros((volume.shape[0], 256, 256), dtype=np.float32)
-        for i in range(volume.shape[0]):
-            resized_volume[i] = resize(volume[i], (256, 256), preserve_range=True, anti_aliasing=True)
-        logger.info(f'Resized volume shape: {resized_volume.shape}')
+        # stack the 2D NumPy arrays to a 3D shape and resize to 512x512
+        volume = DicomConverter.to_3d_array(processed_slices, target_size=512)
+        logger.info(f'Volume shape after stacking and resizing: {volume.shape}')
         
         # trim volume using intensity threshold
-        volume_processor = VolumeProcessor(resized_volume)
+        volume_processor = VolumeProcessor(volume)
         trimmed_volume = volume_processor.trim_volume_by_threshold(
             intensity_threshold=threshold,
-            min_slices_to_keep=20,      # Keep minimum 20 slices for analysis
+            min_slices_to_keep=20,      # keep minimum 20 slices for analysis
             max_mode=max
         )
         logger.info(f'Trimmed volume shape with threshold {threshold}: {trimmed_volume.shape}')
         
-        # Save the trimmed volume as single PyTorch tensor using disease code
+        # Save the trimmed volume as sequence using disease code
         save_ct_volume(output_path, patient_id, trimmed_volume, disease_code)
         logger.info(f'---------- Successfully processed CT patient {patient_id} from {disease_code} ----------')
     except Exception as e:
@@ -81,6 +73,8 @@ def preprocess_ct_patient_data(output_path: Path, dataset_dir: Path, logger: log
 
 def main():
     """Main function to run CT preprocessing with multiple threshold values."""
+
+    max_mode = True  # set to True for up_threshold, False for down_threshold
     
     # setup logger
     logger = setup_logger(Path('backend/src/logs'), 'ct_preprocessing.log', 'PreprocessingLogger')
@@ -93,13 +87,15 @@ def main():
     threshold_values = [0.5, 0.6, 0.7, 0.8]
     
     logger.info(f'=====< STARTING CT DATA PREPROCESSING WITH INTENSITY THRESHOLDS {threshold_values} >=====')
+    logger.info(f'Mode: {"PROCESSING IMAGES WITH HIGHER INTENSITY VALUES" if max_mode else "PROCESSING IMAGES WITH HIGHER INTENSITY VALUES"} threshold')
     
     # process CT images with different thresholds
     for threshold in threshold_values:
         logger.info(f'===== PROCESSING WITH THRESHOLD {threshold} =====')
         
-        # create threshold-specific output directory
-        ct_output_path = ct_base_output_path / f'threshold_{threshold}'
+        # create threshold-specific output directory based on max_mode
+        prefix = 'up' if max_mode else 'down'
+        ct_output_path = ct_base_output_path / f'{prefix}_threshold_{threshold}'
         ct_output_path.mkdir(parents=True, exist_ok=True)
         
         # process CT images
@@ -111,19 +107,21 @@ def main():
                 # iterate through patient directories within each disease
                 for patient_dir in disease_dir.iterdir():
                     if patient_dir.is_dir() and not patient_dir.name.startswith('.'):
-                        preprocess_ct_patient_data(ct_output_path, patient_dir, logger, disease_code, threshold, max=True)
+                        preprocess_ct_patient_data(ct_output_path, patient_dir, logger, disease_code, threshold, max=max_mode)
 
     logger.info(f'=====< CT DATA PREPROCESSING COMPLETED FOR ALL THRESHOLDS >=====')
     
     # log summary of results
     logger.info('===== PREPROCESSING SUMMARY =====')
     for threshold in threshold_values:
-        threshold_path = ct_base_output_path / f'threshold_{threshold}'
+        prefix = 'up' if max_mode else 'down'
+        threshold_path = ct_base_output_path / f'{prefix}_threshold_{threshold}'
+        
         if threshold_path.exists():
-            total_files = len(list(threshold_path.rglob('*.pt')))
-            logger.info(f'Threshold {threshold}: {total_files} processed volumes')
+            total_files = len(list(threshold_path.rglob('*.npy')))
+            logger.info(f'{prefix.capitalize()} Threshold {threshold}: {total_files} processed volumes')
         else:
-            logger.info(f'Threshold {threshold}: No output directory found')
+            logger.info(f'{prefix.capitalize()} Threshold {threshold}: No output directory found')
 
 
 # ========== Runnable ==========

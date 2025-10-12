@@ -90,15 +90,35 @@ class IntensityProcessor:
         :return: An image converted into Standardized Uptake Value.
         """
         try:
+            # check if required metadata exists and is not None
+            if not hasattr(metadata, 'PatientWeight') or metadata.PatientWeight is None:
+                self.logger.warning('Skipping SUV conversion: PatientWeight is missing or None')
+                return image.astype(np.float32)
+            
+            if not hasattr(metadata, 'RadiopharmaceuticalInformationSequence') or \
+               not metadata.RadiopharmaceuticalInformationSequence:
+                self.logger.warning('Skipping SUV conversion: RadiopharmaceuticalInformationSequence is missing')
+                return image.astype(np.float32)
+            
             weight = float(metadata.PatientWeight)
             rph_info = metadata.RadiopharmaceuticalInformationSequence[0]
+            
+            if not hasattr(rph_info, 'RadionuclideTotalDose') or rph_info.RadionuclideTotalDose is None:
+                self.logger.warning('Skipping SUV conversion: RadionuclideTotalDose is missing or None')
+                return image.astype(np.float32)
+            
             dose = float(rph_info.RadionuclideTotalDose) / 1e6
+            
+            if dose == 0:
+                self.logger.warning('Skipping SUV conversion: RadionuclideTotalDose is zero')
+                return image.astype(np.float32)
+            
             suv = (image.astype(np.float32) * weight) / dose
             return suv
         
         except Exception as e:
             self.logger.error(f'Could not convert to SUV: {e}')
-            return image
+            return image.astype(np.float32)
 
 
     @staticmethod
