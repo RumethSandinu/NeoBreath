@@ -1,8 +1,6 @@
-# ==== Standard Imports ====
+# imports
 import logging
 from pathlib import Path
-
-# ==== Third Party Imports ====
 import numpy as np
 from pydicom import dcmread
 from skimage.transform import resize
@@ -86,7 +84,8 @@ class DicomConverter:
         :return: A List of tuples (pixel_array, metadata)
         """
         slices = []
-        files = list(dicom_path.glob('*.dcm'))
+        # include nested directories to be robust across TCIA/TCIA-like structures
+        files = list(dicom_path.rglob('*.dcm'))
         self.logger.info(f'Found {len(files)} DICOM files in {dicom_path}')
 
         for file in files:
@@ -144,14 +143,14 @@ class DicomConverter:
 
 
     @staticmethod
-    def to_3d_array(slices: list, target_size: int = 256) -> np.ndarray:
+    def to_3d_array(slices: list, target_size: int = 128) -> np.ndarray:
         """
         Converts a list of 2D image arrays into a 3D shape.
-        Resizes all slices to the target size (default 256x256) to ensure consistency.
+        Resizes all slices to the target size (default 128x128) to ensure consistency.
 
         Args:
         :param slices: The list of images to be converted.
-        :param target_size: Target size for each slice (default 256).
+        :param target_size: Target size for each slice (default 128).
         :return: A 3D image array with shape (N, target_size, target_size).
         """
         if not slices:

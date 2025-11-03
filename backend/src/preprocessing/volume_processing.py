@@ -1,7 +1,5 @@
-# ==== Standard Imports ====
+# imports
 import logging
-
-# ==== Third Party Imports ====
 import numpy as np
 
 

@@ -1,56 +1,55 @@
-# ==== Standard Imports ====
+# imports
 from pathlib import Path
 import logging
-
-# ==== Local Project Imports ====
 from preprocessing.dicom_converter import DicomConverter, save_pet_volume
 from preprocessing.intensity_processing import IntensityProcessor
 from preprocessing.volume_processing import VolumeProcessor
 from utils.logger import setup_logger
 
 
-def preprocess_pet_patient_data(output_path: Path, dataset_dir: Path, disease_code: str, logger: logging.Logger, threshold: float, max: bool=True):
+def preprocess_pet_patient_data(output_path: Path, dataset_dir: Path, disease_code: str, logger: logging.Logger, threshold: float, max_mode: bool=True):
     """
-    Process PET scan and save as volumes with PyTorch tensors.
+    Process PET scan and save volumes as NumPy arrays.
 
     Implements complete preprocessing pipeline:
-    1. Read DICOM -> list of 2D slices
-    2. Sort slices by z-position
-    3. Stack into 3D volume
-    4. Convert to SUV
-    5. Normalize to [0,1]
-    6. Trim sequences using intensity threshold value to avoid legs/head
-    7. Final shape: (N, 256, 256) where N is slice count
-    8. Save as numpy array
+    1. DICOM to list of 2D slices.
+    2. Sort slices by z-position.
+    3. Stack into 3D volume.
+    4. Convert to SUV.
+    5. Normalize to [0,1].
+    6. Trim sequences using intensity threshold value to avoid legs/head.
+    7. Final shape: (N, 128, 128) where N is slice count.
+    8. Save as NumPy arrays.
     
     Args:
     :param output_path: Path to save the processed volume.
     :param dataset_dir: Path to the patient's DICOM directory.
     :param logger: Logger instance to track processing.
-    :param disease_code: Disease code letter (A, B, E, G).
+    :param disease_code: Disease code letter (A, B, G).
     :param threshold: Intensity threshold for volume trimming.
-    :param max: True, save the slices >= intensity threshold.
+    :param max_mode: True, keep slices >= intensity threshold (trim legs/head); False keeps < threshold.
     """
     
     patient_id = dataset_dir.name
     logger.info(f'=====< PRE-PROCESSING PET PATIENT {patient_id} FROM {disease_code} >=====')
 
     try:
-        # check for DICOM files
-        dicom_files = list(dataset_dir.glob('*.dcm'))
-        
-        if not dicom_files:
+        # check for any DICOM files
+        if not any(dataset_dir.rglob('*.dcm')):
             logger.info(f'Skipping PET patient {patient_id} due to missing DICOM files.')
             return
 
         # convert DICOM slices to 2D NumPy arrays and sort by z-position
         slices = DicomConverter().to_2d_array(dataset_dir)
 
-        # convert to SUV and apply normalization for PET scans
-        slices = IntensityProcessor(slices, True).convert() 
+        # convert to SUV, defer normalization until after stacking for consistent thresholds
+        slices = IntensityProcessor(slices, normalize=False).convert()
 
-        # stack the 2D NumPy arrays to a 3D shape and resize to 256x256
-        volume = DicomConverter.to_3d_array(slices, target_size=256)
+        # stack the 2D NumPy arrays to a 3D shape and resize to 128x128
+        volume = DicomConverter.to_3d_array(slices, target_size=128)
+        
+        # normalize entire volume to [0,1] and cast to float32 for consistency and storage efficiency
+        volume = IntensityProcessor._normalize(volume).astype('float32')
         
         logger.info(f'Volume shape after stacking and resizing: {volume.shape}')
         
@@ -58,14 +57,16 @@ def preprocess_pet_patient_data(output_path: Path, dataset_dir: Path, disease_co
         volume_processor = VolumeProcessor(volume)
         trimmed_volume = volume_processor.trim_volume_by_threshold(
             intensity_threshold=threshold,
-            min_slices_to_keep=20,      # keep minimum 20 slices for analysis
-            max_mode=max
+            # keep minimum 8 slices for analysis
+            min_slices_to_keep=8,
+            max_mode=max_mode
         )
         logger.info(f'Trimmed volume shape with threshold {threshold}: {trimmed_volume.shape}')
         
         # save the trimmed volume as sequence using disease code
-        save_pet_volume(output_path, patient_id, trimmed_volume, disease_code)
+        save_pet_volume(output_path, patient_id, trimmed_volume.astype('float32'), disease_code)
         logger.info(f'---------- Successfully processed PET patient {patient_id} from {disease_code} ----------')
+
     except Exception as e:
         logger.error(f'Error processing PET patient {patient_id} from {disease_code}: {e}')
         raise
@@ -74,7 +75,8 @@ def preprocess_pet_patient_data(output_path: Path, dataset_dir: Path, disease_co
 def main():
     """Main function to run PET preprocessing with multiple threshold values."""
 
-    max_mode = True # set to True for up_threshold, False for down_threshold
+    # set to True for up_threshold, False for down_threshold
+    max_mode = False
 
     # setup logger
     logger = setup_logger(Path('backend/src/logs'), 'pet_preprocessing.log', 'PreprocessingLogger')
@@ -84,7 +86,7 @@ def main():
     pet_base_output_path = Path('data/preprocessed/PET')
     
     # threshold values to test
-    threshold_values = [0.5, 0.6, 0.7, 0.8]
+    threshold_values = [0.6, 0.7, 0.8, 0.9]
     
     logger.info(f'=====< STARTING PET DATA PREPROCESSING WITH INTENSITY THRESHOLDS {threshold_values} >=====')
     logger.info(f'Mode: {"PROCESSING IMAGES WITH HIGHER INTENSITY VALUES" if max_mode else "PROCESSING IMAGES WITH LOWER INTENSITY VALUES"} threshold')
@@ -107,7 +109,7 @@ def main():
                 # iterate through patient directories within each disease
                 for patient_dir in disease_dir.iterdir():
                     if patient_dir.is_dir() and not patient_dir.name.startswith('.'):
-                        preprocess_pet_patient_data(pet_output_path, patient_dir, disease_code, logger, threshold, max=max_mode)
+                        preprocess_pet_patient_data(pet_output_path, patient_dir, disease_code, logger, threshold, max_mode=max_mode)
     
     logger.info(f'=====< PET DATA PREPROCESSING COMPLETED FOR ALL THRESHOLDS >=====')
     
