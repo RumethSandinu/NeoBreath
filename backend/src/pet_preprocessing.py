@@ -76,7 +76,7 @@ def main():
     """Main function to run PET preprocessing with multiple threshold values."""
 
     # set to True for up_threshold, False for down_threshold
-    max_mode = True
+    max_mode = False
 
     # setup logger
     logger = setup_logger(Path('backend/src/logs'), 'pet_preprocessing.log', 'PreprocessingLogger')
