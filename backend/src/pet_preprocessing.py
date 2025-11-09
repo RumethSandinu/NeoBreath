@@ -76,7 +76,7 @@ def main():
     """Main function to run PET preprocessing with multiple threshold values."""
 
     # set to True for up_threshold, False for down_threshold
-    max_mode = False
+    max_mode = True
 
     # setup logger
     logger = setup_logger(Path('backend/src/logs'), 'pet_preprocessing.log', 'PreprocessingLogger')
@@ -86,7 +86,7 @@ def main():
     pet_base_output_path = Path('data/preprocessed/PET')
     
     # threshold values to test
-    threshold_values = [0.6, 0.7, 0.8, 0.9]
+    threshold_values = [0.5, 0.6, 0.7, 0.8]
     
     logger.info(f'=====< STARTING PET DATA PREPROCESSING WITH INTENSITY THRESHOLDS {threshold_values} >=====')
     logger.info(f'Mode: {"PROCESSING IMAGES WITH HIGHER INTENSITY VALUES" if max_mode else "PROCESSING IMAGES WITH LOWER INTENSITY VALUES"} threshold')
@@ -126,6 +126,6 @@ def main():
             logger.info(f'{prefix.capitalize()} Threshold {threshold}: No output directory found')
 
 
-# ========== Runnable ==========
+# runnable
 if __name__ == '__main__':
     main()
