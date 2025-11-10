@@ -37,3 +37,6 @@ dist/
 
 # Except the pipeline directory
 !/data/Pipelines
+
+# Model checkpoints
+*.pt
