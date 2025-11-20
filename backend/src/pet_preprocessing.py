@@ -86,7 +86,7 @@ def main():
     pet_base_output_path = Path('data/preprocessed/PET')
     
     # threshold values to test
-    threshold_values = [0.5, 0.6, 0.7, 0.8]
+    threshold_values = [0.9]
     
     logger.info(f'=====< STARTING PET DATA PREPROCESSING WITH INTENSITY THRESHOLDS {threshold_values} >=====')
     logger.info(f'Mode: {"PROCESSING IMAGES WITH HIGHER INTENSITY VALUES" if max_mode else "PROCESSING IMAGES WITH LOWER INTENSITY VALUES"} threshold')
