@@ -1,0 +1,44 @@
+{
+  "n_sequences_per_class": 25,
+  "seq_length": 8,
+  "image_size": 128,
+  "inference_steps": 50,
+  "use_fp16": true,
+  "classes": [
+    "A",
+    "B",
+    "G"
+  ],
+  "per_class": {
+    "A": {
+      "diversity": 0.011213740333907912,
+      "pixel_diff": 0.012020890600979328,
+      "ssim": 0.8629784737052948,
+      "num_generated_sequences": 25,
+      "num_generated_frames": 200,
+      "num_real_frames_available": 3664
+    },
+    "B": {
+      "diversity": 0.009398921392852292,
+      "pixel_diff": 0.013430298306047916,
+      "ssim": 0.8751413049928698,
+      "num_generated_sequences": 25,
+      "num_generated_frames": 200,
+      "num_real_frames_available": 200
+    },
+    "G": {
+      "diversity": 0.018678516149509473,
+      "pixel_diff": 0.0196967963129282,
+      "ssim": 0.8340951895379792,
+      "num_generated_sequences": 25,
+      "num_generated_frames": 200,
+      "num_real_frames_available": 776
+    }
+  },
+  "overall_mean": {
+    "diversity": 0.013097059292089893,
+    "pixel_diff": 0.015049328406651815,
+    "ssim": 0.857404989412048
+  },
+  "elapsed_min": 1.5856955130894979
+}
