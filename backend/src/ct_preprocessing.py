@@ -51,19 +51,19 @@ def preprocess_ct_patient_data(output_path: Path, dataset_dir: Path, logger: log
         processed_slices = intensity_processor.convert()
 
         # stack the 2D NumPy arrays to a 3D shape and resize to 512x512
-        volume = DicomConverter.to_3d_array(processed_slices, target_size=512)
+        volume = DicomConverter.to_3d_array(processed_slices, target_size=256)
         logger.info(f'Volume shape after stacking and resizing: {volume.shape}')
         
         # trim volume using intensity threshold
         volume_processor = VolumeProcessor(volume)
         trimmed_volume = volume_processor.trim_volume_by_threshold(
             intensity_threshold=threshold,
-            min_slices_to_keep=20,      # keep minimum 20 slices for analysis
+            min_slices_to_keep=8,      # keep minimum 20 slices for analysis
             max_mode=max
         )
         logger.info(f'Trimmed volume shape with threshold {threshold}: {trimmed_volume.shape}')
         
-        # Save the trimmed volume as sequence using disease code
+        # save the trimmed volume as sequence using disease code
         save_ct_volume(output_path, patient_id, trimmed_volume, disease_code)
         logger.info(f'---------- Successfully processed CT patient {patient_id} from {disease_code} ----------')
     except Exception as e:
@@ -84,7 +84,7 @@ def main():
     ct_base_output_path = Path('data/preprocessed/CT')
     
     # threshold values to test
-    threshold_values = [0.5, 0.6, 0.7, 0.8]
+    threshold_values = [0.5]
     
     logger.info(f'=====< STARTING CT DATA PREPROCESSING WITH INTENSITY THRESHOLDS {threshold_values} >=====')
     logger.info(f'Mode: {"PROCESSING IMAGES WITH HIGHER INTENSITY VALUES" if max_mode else "PROCESSING IMAGES WITH HIGHER INTENSITY VALUES"} threshold')
