@@ -1,0 +1,39 @@
+{
+  "generation_config": {
+    "model_path": "/content/ckpt_ep20.pt",
+    "split_path": "/content/split_seed42_aug_80_20_balanced.json",
+    "batch_size": 100,
+    "inference_steps": 50,
+    "sequence_length": 8,
+    "image_size": 128,
+    "target_count": 4152
+  },
+  "class_summary": {
+    "B": {
+      "samples_generated": 3808,
+      "existing_train_samples": 344,
+      "total_after_augmentation": 4152,
+      "target": 4152,
+      "output_directory": "generated_PET_samples_up5/B",
+      "sample_shape": [
+        8,
+        128,
+        128
+      ],
+      "files_saved": 3808
+    },
+    "G": {
+      "samples_generated": 2981,
+      "existing_train_samples": 1171,
+      "total_after_augmentation": 4152,
+      "target": 4152,
+      "output_directory": "generated_PET_samples_up5/G",
+      "sample_shape": [
+        8,
+        128,
+        128
+      ],
+      "files_saved": 2981
+    }
+  }
+}
