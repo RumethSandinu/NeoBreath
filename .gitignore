@@ -40,3 +40,5 @@ dist/
 
 # Model checkpoints
 *.pt
+
+*.png
