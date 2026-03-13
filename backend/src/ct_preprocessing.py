@@ -15,13 +15,13 @@ def preprocess_ct_patient_data(output_path: Path, dataset_dir: Path, logger: log
     Implements complete preprocessing pipeline:
     1. Read DICOM → list of 2D slices
     2. Sort slices by z-position  
-    3. Stack into 3D volume
-    4. Clip values (CT: HU in [-1000,400])
-    5. Normalize to [0,1]
-    6. Resize every slice to 512x512
+    3. Resize into 128z128 pixel size
+    4. Stack into 3D volume
+    5. Clip values (CT: HU in [-1000,400])
+    6. Normalize to [0,1]
     7. Trim sequences using intensity threshold value to avoid legs/head
     8. Final shape: (N, 512, 512) where N is slice count
-    9. SSave as numpy array
+    9. Save as numpy array
     
     Args:
     :param output_path: Path to save the processed volume.

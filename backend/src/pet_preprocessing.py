@@ -14,11 +14,11 @@ def preprocess_pet_patient_data(output_path: Path, dataset_dir: Path, disease_co
     Implements complete preprocessing pipeline:
     1. DICOM to list of 2D slices.
     2. Sort slices by z-position.
-    3. Stack into 3D volume.
-    4. Convert to SUV.
-    5. Normalize to [0,1].
-    6. Trim sequences using intensity threshold value to avoid legs/head.
-    7. Final shape: (N, 128, 128) where N is slice count.
+    3. Resize into 128x128 pixel size
+    4. Stack into 3D volume.
+    5. Convert to SUV.
+    6. Normalize to [0,1].
+    7. Trim sequences using intensity threshold value to avoid legs/head.
     8. Save as NumPy arrays.
     
     Args:
