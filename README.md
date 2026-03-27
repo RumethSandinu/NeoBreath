@@ -65,7 +65,7 @@ The PET pipeline sorts slices by Z position, stacks them into a 3D volume, conve
 *Figure: PET preprocessing pipeline*
 
 ### CT Preprocessing Pipeline
-The PET pipeline follows a similar process, with intensity conversion to Hounsfield Units (HU) before normalization and RoI extraction, producing a 2.5D PET NumPy array.
+The CT pipeline follows a similar process, with intensity conversion to Hounsfield Units (HU) before normalization and RoI extraction, producing a 2.5D PET NumPy array.
 
 ![CT preprocessing pipeline diagram](img/ct-pipeline.png)
 
